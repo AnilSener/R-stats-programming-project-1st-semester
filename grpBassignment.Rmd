@@ -1,0 +1,362 @@
+---
+title: "CEREAL DATA \n R Assignment"
+author: "Group B"
+date: "12/12/2014"
+output: html_document
+---
+#DATASET: Information about breakfast cereals
+#OBJECTIVE: UNDERSTAND WHAT ARE THE FACTORS THAT AFFECT CALORIES IN BREAKFAST CEREALS
+
+#We have divided our exercise into two parts 
+#In part 1, we try to apporach the problem using the regluar linear regression using the lm function
+#In part 2, we try to approach the problem using generalised linear models and k fold validation
+#Part 2 required us to use different statistics and measures to arrive the the best model - We primarily looked at the AIC
+
+KEY FINDINGS FOR BUSINESS:
+0. We used linear regression using the least squares method to understand which variables impact the amout of calories the most in several breakfast cereals
+1. The model has a high adj. R^2 of 0.871 which means it can explain 87.1% of the change in the target variable calories
+2. The type of cereals that are consumed hot have a significantly higher calorie content as seen by the large postive coefficient of 16.5959
+3. The next biggest impact is by the content of fat in the cereals - higher the fat, higher the calories
+4. It can be seen that a unit increase in fat increases the calories by 8.8 units which is quite large
+
+
+#VARIABLE INFORMATION:
+#Breakfast cereal variables:
+#cereal name [name]
+#manufacturer (e.g., Kellogg's) [mfr]
+#type (cold/hot) [type]
+#calories (number) [calories]
+#protein(g) [protein]
+#fat(g) [fat]
+#sodium(mg) [sodium]
+#dietary fiber(g) [fiber]
+#complex carbohydrates(g) [carbo]
+#sugars(g) [sugars]
+#display shelf (1, 2, or 3, counting from the floor) [shelf]
+#potassium(mg) [potass]
+#vitamins & minerals (0, 25, or 100, respectively indicating
+#'none added'; 'enriched, often to 25% FDA recommended'; '100% of
+#FDA recommended') [vitamins]
+#weight (in ounces) of one serving (serving size) [weight]
+#cups per serving [cups]
+#Manufacturers are represented by their first initial: A=American Home Food Products, G=General Mills,
+#K=Kelloggs, N=Nabisco, P=Post, Q=Quaker Oats, R=Ralston Purina)
+
+```{r}
+#LOAD LIBRARIES
+library(ggplot2)
+library(car)
+library(GGally)
+library(effects)
+library(MASS)
+library(boot)
+
+```
+PART ONE - 
+
+#CONDITIONS FOR LINEAR REGRESSION:
+#1. linearity
+#2. homoschedasticity
+#3. independence
+#4. normality
+
+READING THE DATA
+```{r}
+#setwd("C:/Documents and Settings/Administrator/Desktop/R")
+df <- read.csv("cereal.txt",sep= " ", header = TRUE)
+str(df)
+cor(df[,4:15]) #check correlations
+#checking relationships
+#ggpairs(df[,4:15])
+#dropping cereal name - this is the primary key -- the model will use only this variable if left in
+df <- df[,2:15]
+#remove missing values
+df <- na.omit(df)
+```
+
+BUILDING A MODEL WITH EACH VARIABLE - THIS IS SAME AS CHECKING CORRELATION
+```{r}
+#MODEL 0
+fit <- lm(calories ~ protein, data = df)
+summary(fit)
+yhat <- predict(fit)
+qplot(protein, calories, data=df, geom="point") + geom_smooth(method="lm", se=FALSE,size=1) +
+  geom_segment(x=df$protein, y=df$calories, xend=df$protein, yend=yhat, colour=I("red"),alpha=0.5)
+plot(fit)
+
+fit <- lm(calories ~ fat, data = df)
+summary(fit)
+yhat <- predict(fit)
+qplot(fat, calories, data=df, geom="point") + geom_smooth(method="lm", se=FALSE,size=1) +
+  geom_segment(x=df$fat, y=df$calories, xend=df$fat, yend=yhat, colour=I("red"),alpha=0.5)
+plot(fit)
+
+fit <- lm(calories ~ sodium, data = df)
+summary(fit)
+yhat <- predict(fit)
+qplot(sodium, calories, data=df, geom="point") + geom_smooth(method="lm", se=FALSE,size=1) +
+  geom_segment(x=df$sodium, y=df$calories, xend=df$sodium, yend=yhat, colour=I("red"),alpha=0.5)
+plot(fit)
+
+#This was performed for serveral of the variables - An alternate way of doing this is using the stepwise algorithm (This has been performed below - MODEL 3)
+
+```
+
+- We used linear regression using the least squares method to understand which variables impact the amout of calories the most
+For MODEL 1:
+1. Model including all variables was intially giving a rating of adj. R^2 = 0.867.
+2. The global P value was lower than the set significance level of 0.05
+3. DurbinWatson statistic value 2.037 suggests that there is no autocorrelation between the residuals. ie., there are no patterns in the residuals. 
+  a. This can also be checked by plotting the residuals to ensure homoschedasticity
+4. However, P values of coeffiecients of individual variables are higher than 0.05 which means that they must be removed
+5. Models can be compared by using the R^2, AIC, ANOVA
+  a. Akaike information criterion (AIC) - Lower the better, Penalises too many parameters, Penalises poor fit
+6. The four major conditions for linear regression have been met:
+	a. Linearity
+	b. Normality
+	c. Homoschedasticity
+	d. Independence
+7. More comments in the code as well
+
+```{r}
+#Performing linear regression
+#MODEL NO.1
+fit <- lm(calories ~ .,data=df)
+summary(fit)
+
+#Residuals:
+#     Min       1Q   Median       3Q      Max 
+#-19.2169  -3.6448   0.1187   3.6035  19.2169 
+#>The residuals are more or less normally distributed.
+#>We know this because the median is close to 0
+#>Also, the modulus of min and max and 1Q and 3Q are are similar
+
+#Coefficients of variables being dropped:
+#              Estimate Std. Error t value Pr(>|t|)    
+#sodium      -2.224e-04  1.524e-02  -0.015 0.988407    
+#fiber       -1.904e+00  1.247e+00  -1.527 0.132222    
+#shelf       -1.759e+00  1.299e+00  -1.354 0.180990    
+#potass       4.876e-02  3.790e-02   1.287 0.203348    
+#vitamins     4.331e-02  4.520e-02   0.958 0.341934    
+#weight       2.434e+00  3.073e+00   0.792 0.431627    
+#cups        -1.443e+00  2.037e+00  -0.708 0.481629 
+#>We will be dropping the above variables from the model because their p values are higher than our set significance level of 0.05
+
+#Multiple R-squared:  0.899,     Adjusted R-squared:  0.8676 
+#F-statistic: 28.67 on 18 and 58 DF,  p-value: < 2.2e-16
+#> Adjusted R squared value is closer to 1 which means that this model can explain 86% of change in target variable
+#> Global P value is low which means that the model is statistically significant - provided the 4 conditions for linear regression are metric
+#>F-statistic will help us compare models
+```
+
+```{r}
+#MODEL NO.2
+fit <- lm(calories~mfr+type+protein+fat+carbo+sugars,data=df)
+summary(fit) #F-statistic = 46.77 p-value <0.05
+
+```
+
+```{r}
+#MODEL NO.3
+fit2 <- lm(calories ~ .,data=df)
+backwards <- step(fit2)
+#the best result from the step selection process 
+fit2 <- lm(calories ~ mfr + type + protein + fat + fiber + carbo + sugars + potass,data=df)
+summary(fit2) #F-statistic = 40.63 p-value <0.05
+
+#anova(fit,fit2) 
+#Analysis of Variance Table
+#Model 1: calories ~ mfr + type + protein + fat + carbo + sugars
+#Model 2: calories ~ mfr + type + protein + fat + fiber + carbo + sugars + potass
+#  Res.Df    RSS Df Sum of Sq      F Pr(>F)
+#1     65 3236.3                           
+#2     63 3074.7  2    161.56 1.6551 0.1993
+#RSS is lower for fit2, however the difference between the models is not statistically significant
+
+#>Since MODEL NO.2 gave us the highest F-statistic with good p-values global as well as for variables, we choose to continue our analysis with the same set of variables
+```
+
+```{r}
+#MODEL NO.2
+fit <- lm(calories~mfr+type+protein+fat+carbo+sugars,data=df)
+#ANALYSIS OF THE RESULTS
+summary(fit) #F-statistic = 46.77 p-value <0.05 Adj R^2 = 0.8688
+plot(fit)
+#>There appear to be patterns in the residuals
+#>
+
+#Checkign for multicollinearlity
+vif(fit) #Since none of the values are >5, we can conclude that there is no multicollinearlity
+
+#checking for independence
+durbinWatsonTest(fit) #the DW statistic of close to 2 and p value > 0.05 tells us that there is no autocorrelation
+
+#checking interactions
+#despite this, we still will be checking interactions to be sure
+fit <- lm(calories~mfr+(fat*type*protein*carbo*sugars),data=df)
+plot(effect("fat:sugars",fit,xlevels=list(fat=c(0:5))),multiline=TRUE)
+plot(effect("fat:protein",fit,xlevels=list(fat=c(0:5))),multiline=TRUE)
+plot(effect("fat:carbo",fit,xlevels=list(carbo=df$carbo)),multiline=TRUE)
+plot(effect("fat:type",fit,xlevels=list(fat=c(0:5))),multiline=TRUE)
+
+#spotting outliers
+outlierTest(fit)
+x <- resid(fit)
+#QQ PLOT
+#qqPlot(fit, labels=row.names(df), id.method="identify",main = "QQ-Plot")
+#DENSITY DISTRIBUTION
+qplot(x,geom="blank") +
+  geom_histogram( colour=I("white"), aes(y=..density..)) +
+  stat_function(fun=dnorm, aes(colour="Normal"),arg=list(mean=mean(resid(fit)),
+                                                         sd=sd(resid(fit))))
+```
+PART TWO - 
+
+
+#linear regression function - lm has some limitations
+#1. The residuals must be normally distributed
+#2. The variance must be constant
+
+#Generalised linear regression - glm overcomes these problems
+#1. no normality requirement
+#2. non-constant variance is allowed
+
+#We will therefore focus on using glm rather than lm functions 
+#The key metric to see overall model effectiveness is AIC
+#Akaike information criterion (AIC)
+#Lower the better
+#Penalises too many parameters
+#Penalises poor fit
+
+
+```{r}
+#MODEL GLM01
+fit <- glm(calories~.,data=df,family=poisson)
+summary(fit)
+
+#MODEL GLM02
+#getting rid of variables with p value higher than 0.05
+fit <- glm(calories~mfr+type+protein+fat+carbo+sugars,data=df,family=poisson)
+summary(fit)
+#backwards
+backwards <- step(fit)
+#Step:  AIC=561.51
+#calories ~ type + protein + fat + carbo + sugars
+```
+
+```{r}
+#MODEL GLM03
+fit <- glm(calories~.,data=df,family=poisson)
+summary(fit)
+backwards <- step(fit)
+#Step:  AIC=561.11
+#calories ~ type + protein + fat + fiber + carbo + sugars + weight
+
+
+#MODEL GLM04
+formula = 'calories ~ (type + protein + fat + fiber + carbo + sugars + weight)^2'
+fit <- glm(formula,data=df,family=poisson)
+summary(fit)
+backwards <- step(fit)
+#AIC=536.67
+#calories ~ type + protein + fat + fiber + carbo + sugars + weight + type:fiber + protein:weight
+plot(fit)
+
+#MODEL GLM05
+formula = 'calories ~ fat + carbo + sugars + (type*fiber)^2 + protein*weight'
+fit <- glm(formula,data=df,family=poisson)
+summary(fit) #AIC=536.67
+#plot(fit)
+vif(fit)
+```
+
+
+The model with lowest AIC
+```{r}
+fit <- glm(calories~type+protein+fat+carbo+sugars,data=df,family=poisson)
+summary(fit) # AIC:561.51 -->Best Model after stewise backwards
+
+#After stepwise based on interactions previously observed better models are created with lower AIC
+fit <- glm(calories~type+protein+fat*carbo+sugars,data=df,family=poisson)
+summary(fit) # AIC:556.76
+
+fit <- glm(calories~protein+fat*carbo+sugars+fat:type+carbo:type,data=df,family=poisson)
+summary(fit) #AIC: 543.38 carbo:type is insignificant
+
+fit <- glm(calories~protein+fat*carbo+sugars+fat:type+carbo:sugars ,data=df,family=poisson)
+summary(fit) #AIC: 544.31 carbo:sugars is insignificant
+
+fit <- glm(calories~protein+fat*carbo+sugars+fat:type+fat:sugars,data=df,family=poisson)
+summary(fit) #AIC: 544.1 fat:sugars is insignificant
+
+fit <- glm(calories~protein+fat*carbo+sugars+fat:type,data=df,family=poisson)
+summary(fit) #AIC: 543.96
+vif(fit)
+outlierTest(fit)
+#This model passed Bonferrorni test because iit is greater than alpha
+plot(fit)
+#qqPlot(fit, labels=row.names(states), id.method="identify",main = "QQ-Plot")
+durbinWatsonTest(fit)
+#lag Autocorrelation D-W Statistic p-value
+#   1       0.3251559      1.346033       0
+#Errors are not independent, p <0.05, This model failed independence of errors
+fit <- glm(calories~protein+fat*carbo+sugars+fat:type+fiber:type,data=df,family=poisson)
+summary(fit) #AIC: 542.69
+durbinWatsonTest(fit)
+# lag Autocorrelation D-W Statistic p-value
+#   1        0.337047      1.324232   0.002
+#There is high multi-collineranity in the model above, This model failed independence of errors
+
+
+#Best Model Currenlty need to complete the diagnostics
+#We understand that according to common sense we should leave fiber and type as regular variables in the model
+#However, just to get at the lowest AIC, we have not included them
+#This means it is not the best real world model
+fit <- glm(calories~protein+fat*carbo+sugars+fiber:type,data=df,family=poisson)
+summary(fit) #AIC: 542.21
+plot(fit)
+vif(fit)
+durbinWatsonTest(fit)
+#lag Autocorrelation D-W Statistic p-value
+#   1       0.2801377      1.437869   0.114
+#This model passed indepence of errors test since its p-value is higher than alpha
+#qqnorm(fit, ylab="Studentized Residuals") # Q-Q plot
+#abline(0,1) # line ’y = x’
+
+
+```
+
+K - FOLD VALIDATION AND LEAVE ONE OUT VALIDATION
+
+```{r}
+
+#MODEL GLM06
+#due to the high VIF value of the previous model
+formula = 'calories ~ fat + carbo + sugars + type*fiber + protein'
+fit <- glm(formula,data=df,family=poisson)
+summary(fit) #AIC 543.62
+
+plot(fit)
+
+#Checks for multicollinearity
+vif(fit) # there is no value >= 5 which means that there is no multicollinearity
+
+#spotting outliers
+outlierTest(fit)
+x <- resid(fit)
+#QQ PLOT
+#qqPlot(fit, labels=row.names(df), id.method="identify",main = "QQ-Plot")
+#DENSITY DISTRIBUTION
+qplot(x,geom="blank") +
+  geom_histogram( colour=I("white"), aes(y=..density..)) +
+  stat_function(fun=dnorm, aes(colour="Normal"),arg=list(mean=mean(resid(fit)),
+                                                         sd=sd(resid(fit))))
+
+#K FOLD VALIDATION -- TO STOP THE MODEL FROM OVERFITTING
+#1. LEAVE ONE OUT 
+cv.err <- cv.glm(df, fit)
+summary(fit)
+
+#2. 10 FOLD VALIDATION
+cv.err.10 <- cv.glm(df, fit, K=10)
+```
